@@ -1,0 +1,1 @@
+Software di inversione geoelettrica 2D per il formato POLARES 32, scritto in Python con pyGIMLi e Matplotlib.
