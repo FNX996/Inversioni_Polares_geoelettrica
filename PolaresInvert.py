@@ -7,12 +7,12 @@ import threading
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 import matplotlib.tri as tri
-import webbrowser # Necessario per aprire il link GitHub
+import webbrowser
 
 class PolaresApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("PolaresInversion - InGeoLab s.r.l.")
+        self.root.title("Inversione Geoelettrica POLARES 32 - Ultimate Edition")
         self.root.geometry("450x280")
         self.root.resizable(False, False)
         
@@ -21,10 +21,11 @@ class PolaresApp:
         self.raw_data = None 
         self.mgr = None
         
-        # Variabili di inversione e IP
+        # Variabili di inversione, IP e Profondità
         self.inv_method = tk.StringVar(value="L2")
         self.lam_val = tk.DoubleVar(value=20.0)
         self.z_weight = tk.DoubleVar(value=1.0)
+        self.max_depth = tk.DoubleVar(value=12.0) # Profondità massima
         self.ip_enabled = tk.BooleanVar(value=False)
         self.ip_cutoff = tk.DoubleVar(value=0.5)
 
@@ -76,7 +77,7 @@ class PolaresApp:
         self.tools_menu.add_command(label="Estrai Profilo Stratigrafico (Sezione 1D)...", command=self.extract_1d_section, state="disabled")
         self.menubar.add_cascade(label="Display & Tools", menu=self.tools_menu)
 
-        # 6. Info (NUOVO MENU ABOUT)
+        # 6. Info
         self.info_menu = tk.Menu(self.menubar, tearoff=0)
         self.info_menu.add_command(label="About PolaresInversion...", command=self.show_about)
         self.menubar.add_cascade(label="Info", menu=self.info_menu)
@@ -93,44 +94,49 @@ class PolaresApp:
         self.lbl_status = tk.Label(self.root, text="", fg="blue")
         self.lbl_status.pack()
 
-    # --- ABOUT & IMPOSTAZIONI ---
+    # --- ABOUT ---
     def show_about(self):
-        # Creiamo una finestra popup personalizzata per poter cliccare il link
         about_win = tk.Toplevel(self.root)
         about_win.title("About")
-        about_win.geometry("380x280")
-        about_win.resizable(False, False)
+        about_win.geometry("400x300")
         
-        # Testo principale
-        tk.Label(about_win, text="PolaresInversion", font=("Arial", 14, "bold")).pack(pady=(15, 5))
-        tk.Label(about_win, text="Versione 1.0", font=("Arial", 10)).pack()
-        tk.Label(about_win, text="InGeoLab s.r.l.", font=("Arial", 10, "italic")).pack(pady=(0, 10))
+        tk.Label(about_win, text="PolaresInversion", font=("Arial", 14, "bold")).pack(pady=(15, 0))
+        tk.Label(about_win, text="by Fabrizio Nori - InGeoLab s.r.l.", font=("Arial", 11, "italic")).pack(pady=(0, 5))
+        tk.Label(about_win, text="Versione 1.0", font=("Arial", 10)).pack(pady=(0, 10))
         
         tk.Label(about_win, text="Librerie Open Source Utilizzate:", font=("Arial", 9, "bold")).pack()
-        libs_text = "• Python 3\n• pyGIMLi (Core FEM)\n• Matplotlib & NumPy (Grafica e Matrici)\n• Tkinter (Interfaccia)"
+        libs_text = "• Python 3\n• pyGIMLi (Core FEM)\n• Matplotlib & NumPy (Grafica e Matrici)\n• Tkinter (Interfaccia GUI)"
         tk.Label(about_win, text=libs_text, font=("Arial", 9), justify="left").pack(pady=5)
         
-        tk.Label(about_win, text="Made by Fabrizio Nori", font=("Arial", 10, "bold")).pack(pady=(15, 0))
-        
-        # Link GitHub Cliccabile
-        link_lbl = tk.Label(about_win, text="https://github.com/FNX996", font=("Arial", 10, "underline"), fg="blue", cursor="hand2")
-        link_lbl.pack(pady=5)
+        link_lbl = tk.Label(about_win, text="GitHub: https://github.com/FNX996", font=("Arial", 10, "underline"), fg="blue", cursor="hand2")
+        link_lbl.pack(pady=10)
         link_lbl.bind("<Button-1>", lambda e: webbrowser.open_new("https://github.com/FNX996"))
         
-        tk.Button(about_win, text="Chiudi", command=about_win.destroy, width=15).pack(pady=10)
+        tk.Button(about_win, text="Chiudi", command=about_win.destroy, width=15).pack(pady=5)
 
+    # --- FUNZIONI IMPOSTAZIONI VIA MENU ---
     def open_settings(self):
         popup = tk.Toplevel(self.root)
         popup.title("Settings")
-        popup.geometry("300x150")
-        tk.Label(popup, text="Lambda (Damping):").grid(row=0, column=0, padx=10, pady=10)
+        popup.geometry("320x180")
+        
+        tk.Label(popup, text="Lambda (Damping):").grid(row=0, column=0, padx=10, pady=10, sticky="w")
         e_lam = tk.Entry(popup, width=10); e_lam.insert(0, str(self.lam_val.get())); e_lam.grid(row=0, column=1)
-        tk.Label(popup, text="Z-Weight (Anisotropy):").grid(row=1, column=0, padx=10, pady=10)
+        
+        tk.Label(popup, text="Z-Weight (Anisotropy):").grid(row=1, column=0, padx=10, pady=10, sticky="w")
         e_z = tk.Entry(popup, width=10); e_z.insert(0, str(self.z_weight.get())); e_z.grid(row=1, column=1)
+        
+        tk.Label(popup, text="Max Depth / Profondità (m):").grid(row=2, column=0, padx=10, pady=10, sticky="w")
+        e_dep = tk.Entry(popup, width=10); e_dep.insert(0, str(self.max_depth.get())); e_dep.grid(row=2, column=1)
+        
         def save():
-            try: self.lam_val.set(float(e_lam.get())); self.z_weight.set(float(e_z.get())); popup.destroy()
+            try: 
+                self.lam_val.set(float(e_lam.get()))
+                self.z_weight.set(float(e_z.get()))
+                self.max_depth.set(float(e_dep.get()))
+                popup.destroy()
             except: pass
-        tk.Button(popup, text="Salva", command=save).grid(row=2, column=0, columnspan=2)
+        tk.Button(popup, text="Salva", command=save, width=12).grid(row=3, column=0, columnspan=2, pady=10)
 
     def set_ip_cutoff(self):
         val = simpledialog.askfloat("I.P. Cutoff", "Minimo valore di I.P. (mV/V) accettabile:", initialvalue=self.ip_cutoff.get())
@@ -145,7 +151,7 @@ class PolaresApp:
             try:
                 self.raw_data = self.parse_dat_file()
                 self.btn_run.config(state="normal")
-                for i in range(5): self.edit_menu.entryconfig(i, state="normal") # Abilita Edit
+                for i in range(5): self.edit_menu.entryconfig(i, state="normal") 
                 self.lbl_status.config(text=f"Dati: {self.raw_data.size()} misure pronte.")
             except Exception as e:
                 messagebox.showerror("Errore", str(e))
@@ -196,7 +202,7 @@ class PolaresApp:
         for i in range(self.raw_data.sensorCount()):
             pos = self.raw_data.sensorPosition(i)
             self.raw_data.setSensorPosition(i, [max_x - pos[0], pos[1], pos[2]])
-        self.raw_data.set('k', ert.geometricFactors(self.raw_data)) # Ricalcola K
+        self.raw_data.set('k', ert.geometricFactors(self.raw_data))
         self.lbl_status.config(text="Sezione specchiata (Reverse). Pronta da invertire.")
         messagebox.showinfo("Reverse", "La geometria della stesa è stata capovolta.")
 
@@ -247,7 +253,7 @@ class PolaresApp:
             x_centers.append((a+b+m+n)/4.0)
             z_pseudo.append(max(abs(a-b), abs(a-m), abs(a-n), abs(b-m), abs(b-n), abs(m-n)) * 0.25)
             
-        sc = ax.scatter(x_centers, z_pseudo, c=self.raw_data('rhoa'), cmap='nipy_spectral', norm=LogNorm(), s=50, picker=True)
+        sc = ax.scatter(x_centers, z_pseudo, c=self.raw_data('rhoa'), cmap='seismic', norm=LogNorm(), s=50, picker=True)
         ax.invert_yaxis()
         ax.set_title("Clicca sui punti spuri per rimuoverli. Chiudi la finestra per salvare.")
         fig.colorbar(sc, ax=ax, label="Apparent Resistivity (Ohm.m)")
@@ -266,7 +272,7 @@ class PolaresApp:
             self.raw_data.removeInvalid()
             self.lbl_status.config(text=f"Rimossi {len(to_remove)} punti visivamente.")
 
-    # --- INVERSIONE ---
+    # --- INVERSIONE RISOLTA: NESSUN ERRORE SUL METODO .DIM ---
     def run_inversion_thread(self):
         if not self.raw_data: return
         self.btn_run.config(state="disabled")
@@ -277,14 +283,27 @@ class PolaresApp:
     def process_inversion(self):
         try:
             is_robust = (self.inv_method.get() == "L1")
+            max_d = self.max_depth.get() # Estrae la profondità desiderata dal menu
+            
+            # Applica matematicamente le quote topografiche direttamente ai picchetti
             if self.topo_filepath:
                 topo_data = np.loadtxt(self.topo_filepath)
-                mesh = pg.meshtools.createMesh(self.raw_data, topo=topo_data, quality=34)
-                self.mgr = ert.ERTManager(self.raw_data, mesh=mesh)
-            else:
-                self.mgr = ert.ERTManager(self.raw_data)
+                # Assicura che la matrice X sia ordinata in modo crescente per l'interpolazione
+                topo_data = topo_data[topo_data[:, 0].argsort()]
                 
-            self.mgr.invert(lam=self.lam_val.get(), zWeight=self.z_weight.get(), robustData=is_robust, blockyModel=is_robust, maxIter=10, verbose=False)
+                for i in range(self.raw_data.sensorCount()):
+                    pos = self.raw_data.sensorPosition(i)
+                    z_val = np.interp(pos[0], topo_data[:, 0], topo_data[:, 1]) # Estrapola Z su X
+                    self.raw_data.setSensorPosition(i, [pos[0], z_val, pos[2]])
+
+            # Il Manager crea la mesh in automatico usando i picchetti. 
+            self.mgr = ert.ERTManager(self.raw_data)
+                
+            # 'paraDepth' ordina a pyGIMLi di troncare la profondità massima della mesh
+            self.mgr.invert(lam=self.lam_val.get(), zWeight=self.z_weight.get(), robustData=is_robust, 
+                            blockyModel=is_robust, paraDepth=max_d, maxIter=10, verbose=False)
+            
+            self.current_response = self.mgr.inv.response
             self.root.after(0, self.on_inversion_complete)
         except Exception as e:
             self.root.after(0, self.on_inversion_error, str(e))
@@ -308,11 +327,10 @@ class PolaresApp:
         if not self.mgr: return
         x_val = simpledialog.askfloat("Sezione 1D", "Inserisci la coordinata X (metri) dove estrarre la colonna virtuale:")
         if x_val is not None:
-            min_z = min([pos[1] for pos in self.mgr.paraDomain.positions()]) # La profondità Z è negativa in pygimli
+            min_z = min([pos[1] for pos in self.mgr.paraDomain.positions()])
             z_vals = np.linspace(0, min_z, 50) 
             points = [[x_val, z] for z in z_vals]
             
-            # Estrapola i valori della resistività vera lungo la linea verticale
             rho_1d = pg.interpolate(self.mgr.paraDomain, self.mgr.model, points)
             
             plt.figure(figsize=(4, 7))
@@ -325,12 +343,13 @@ class PolaresApp:
             plt.xscale('log')
             plt.show()
 
-    # --- MOTORE GRAFICO STILE RES2DINV CON CONTOURING ---
+    # --- MOTORE GRAFICO CON TAGLIO DELLA PROFONDITÀ ---
     def show_custom_plots(self):
         if not self.mgr: return
         plt.close('all')
-        fig, axs = plt.subplots(3, 1, figsize=(12, 10), dpi=100)
-        fig.canvas.manager.set_window_title('Risultati Inversione (Stile RES2DINV)')
+        
+        fig, axs = plt.subplots(3, 1, figsize=(12, 10), sharex=True, dpi=100)
+        fig.canvas.manager.set_window_title('Risultati Inversione (Stile ResIPy)')
         
         data = self.mgr.data
         x_centers, z_pseudo = [], []
@@ -339,39 +358,60 @@ class PolaresApp:
             x_centers.append((a+b+m+n)/4.0)
             z_pseudo.append(max(abs(a-b), abs(a-m), abs(a-n), abs(b-m), abs(b-n), abs(m-n)) * 0.25)
 
-        rhoa_m, rhoa_c = data('rhoa'), self.mgr.inv.response
-        min_rho, max_rho = min(min(rhoa_m), min(rhoa_c)), max(max(rhoa_m), max(rhoa_c))
+        rhoa_m = np.array(data('rhoa'))
+        try:
+            rhoa_c = np.array(self.mgr.inv.response)
+        except:
+            rhoa_c = rhoa_m
+            
+        model_rho = np.array(self.mgr.model)
         
-        # Livelli discreti logaritmici per simulare le bande di colore piatte di RES2DINV
+        # CALCOLO LIMITI ROBUSTI
+        all_vals = np.concatenate((rhoa_m, rhoa_c, model_rho))
+        min_rho = np.percentile(all_vals, 2)
+        max_rho = np.percentile(all_vals, 98)
+        if min_rho <= 0: min_rho = np.min(all_vals[all_vals > 0])
+        
+        res_cmap = plt.get_cmap('seismic', 15)
         levels = np.logspace(np.log10(min_rho), np.log10(max_rho), 15)
-        res_cmap = 'nipy_spectral'
+        unified_norm = LogNorm(vmin=min_rho, vmax=max_rho)
 
-        # Creazione mesh triangolare per la pseudosezione per riempire gli spazi (Interpolazione Delaunay)
         triang = tri.Triangulation(x_centers, z_pseudo)
 
-        # 1. Measured Data (Contoured)
-        tc1 = axs[0].tricontourf(triang, rhoa_m, levels=levels, cmap=res_cmap, norm=LogNorm())
-        axs[0].invert_yaxis(); axs[0].set_title("1. Measured Apparent Resistivity Pseudosection", fontsize=10)
-        axs[0].set_ylabel("Ps.Z")
+        max_d = self.max_depth.get()
+
+        # 1. Measured Data 
+        tc1 = axs[0].tricontourf(triang, rhoa_m, levels=levels, cmap=res_cmap, norm=unified_norm, extend='both')
+        axs[0].set_ylim(bottom=max_d, top=0) # VINCOLO VISIVO
+        axs[0].set_title("1. Measured Apparent Resistivity", fontsize=11)
+        axs[0].set_ylabel("Ps. Depth (m)")
         
-        # 2. Calculated Data (Contoured)
-        tc2 = axs[1].tricontourf(triang, rhoa_c, levels=levels, cmap=res_cmap, norm=LogNorm())
-        axs[1].invert_yaxis(); axs[1].set_title("2. Calculated Apparent Resistivity Pseudosection", fontsize=10)
-        axs[1].set_ylabel("Ps.Z")
+        # 2. Calculated Data
+        tc2 = axs[1].tricontourf(triang, rhoa_c, levels=levels, cmap=res_cmap, norm=unified_norm, extend='both')
+        axs[1].set_ylim(bottom=max_d, top=0) # VINCOLO VISIVO
+        axs[1].set_title("2. Calculated Apparent Resistivity", fontsize=11)
+        axs[1].set_ylabel("Ps. Depth (m)")
         
         # 3. Inverse Model
-        pg.show(self.mgr.paraDomain, self.mgr.model, ax=axs[2], cMap=res_cmap, cMin=min_rho, cMax=max_rho, colorBar=False, hold=True)
-        axs[2].set_title("3. Inverse Model Resistivity Section", fontsize=10)
-        axs[2].set_ylabel("Depth (m)"); axs[2].set_xlabel("x in m")
+        pg.show(self.mgr.paraDomain, self.mgr.model, ax=axs[2], cMap=res_cmap, 
+                cMin=min_rho, cMax=max_rho, logScale=True, colorBar=False, hold=True)
+        axs[2].set_title("3. Inverse Model Resistivity Section", fontsize=11)
+        axs[2].set_ylabel("Depth (m)")
+        axs[2].set_xlabel("Distance X (m)")
         
-        # Colorbars orizzontali stile RES2DINV
-        fig.colorbar(tc1, ax=axs[0], orientation='horizontal', pad=0.25, label="Apparent Resistivity (Ohm.m)", aspect=50)
-        fig.colorbar(tc2, ax=axs[1], orientation='horizontal', pad=0.25, label="Apparent Resistivity (Ohm.m)", aspect=50)
-        for coll in axs[2].collections:
-            fig.colorbar(coll, ax=axs[2], orientation='horizontal', pad=0.25, label="Real Resistivity (Ohm.m)", aspect=50)
-            break
+        # Se la topografia non è usata, forziamo il taglio visuale sulla Z della mesh
+        if not self.topo_filepath:
+            axs[2].set_ylim(bottom=-max_d, top=0)
+            
+        # Forza tutti i grafici ad avere la stessa larghezza
+        for ax in axs:
+            ax.set_aspect('auto')
+        
+        # Un'unica barra colori condivisa in basso
+        cbar_ax = fig.add_axes([0.15, 0.06, 0.7, 0.02])
+        fig.colorbar(tc1, cax=cbar_ax, orientation='horizontal', label="Resistivity (Ohm.m)")
 
-        plt.subplots_adjust(hspace=0.7)
+        plt.subplots_adjust(left=0.1, right=0.95, top=0.95, bottom=0.15, hspace=0.35)
         plt.show()
 
     def export_image(self):
