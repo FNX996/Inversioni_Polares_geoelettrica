@@ -42,3 +42,13 @@ Navigate to the **[Releases](https://github.com/FNX996/InGeoLab/releases)** fram
 2. Clone this repository structure:
    ```bash
    git clone [https://github.com/FNX996/InGeoLab.git](https://github.com/FNX996/InGeoLab.git)
+3. Install missing library components:
+   pip install pygimli matplotlib numpy
+4. Run the code
+   python PolaresInvert.py
+
+👨‍💻 Author Info
+
+    Fabrizio Nori - InGeoLab s.r.l.
+
+    GitHub Profile: @FNX996
