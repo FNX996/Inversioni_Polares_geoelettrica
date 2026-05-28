@@ -7,6 +7,8 @@ import threading
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 import matplotlib.tri as tri
+from matplotlib.widgets import TextBox, Button, CheckButtons
+from matplotlib.ticker import FuncFormatter  # Aggiunto per formattare i numeri della colorbar
 import webbrowser
 
 class PolaresApp:
@@ -21,13 +23,17 @@ class PolaresApp:
         self.raw_data = None 
         self.mgr = None
         
-        # Variabili di inversione, IP e Profondità
+        # Variabili di inversione e IP
         self.inv_method = tk.StringVar(value="L2")
         self.lam_val = tk.DoubleVar(value=20.0)
         self.z_weight = tk.DoubleVar(value=1.0)
-        self.max_depth = tk.DoubleVar(value=12.0) # Profondità massima
+        self.max_depth = tk.DoubleVar(value=12.0)
         self.ip_enabled = tk.BooleanVar(value=False)
         self.ip_cutoff = tk.DoubleVar(value=0.5)
+
+        # Nuove variabili Mesh stile ResIPy
+        self.mesh_cl = tk.DoubleVar(value=0.3) # Characteristic Length (paraDX)
+        self.mesh_refine = tk.BooleanVar(value=False) # Refine Mesh
 
         # --- BARRA DEI MENU ---
         self.menubar = tk.Menu(self.root)
@@ -87,12 +93,14 @@ class PolaresApp:
         self.btn_load.pack(pady=15)
         self.lbl_file = tk.Label(self.root, text="Nessun file selezionato", fg="gray")
         self.lbl_file.pack()
-        self.lbl_topo = tk.Label(self.root, text="Topografia: Nessuna (Piano)", fg="gray")
+        self.lbl_topo = tk.Label(self.root, text="Topografia: Nessuna", fg="gray")
         self.lbl_topo.pack()
         self.btn_run = tk.Button(self.root, text="2. Esegui Inversione", command=self.run_inversion_thread, state="disabled", width=25, bg="#4CAF50", fg="white", font=("Arial", 10, "bold"))
         self.btn_run.pack(pady=15)
         self.lbl_status = tk.Label(self.root, text="", fg="blue")
         self.lbl_status.pack()
+        
+        self.current_fig = None # Per mantenere vivi i widget matplotlib
 
     # --- ABOUT ---
     def show_about(self):
@@ -102,7 +110,7 @@ class PolaresApp:
         
         tk.Label(about_win, text="PolaresInversion", font=("Arial", 14, "bold")).pack(pady=(15, 0))
         tk.Label(about_win, text="by Fabrizio Nori - InGeoLab s.r.l.", font=("Arial", 11, "italic")).pack(pady=(0, 5))
-        tk.Label(about_win, text="Versione 1.0", font=("Arial", 10)).pack(pady=(0, 10))
+        tk.Label(about_win, text="Versione 2.5.0", font=("Arial", 10)).pack(pady=(0, 10))
         
         tk.Label(about_win, text="Librerie Open Source Utilizzate:", font=("Arial", 9, "bold")).pack()
         libs_text = "• Python 3\n• pyGIMLi (Core FEM)\n• Matplotlib & NumPy (Grafica e Matrici)\n• Tkinter (Interfaccia GUI)"
@@ -117,26 +125,33 @@ class PolaresApp:
     # --- FUNZIONI IMPOSTAZIONI VIA MENU ---
     def open_settings(self):
         popup = tk.Toplevel(self.root)
-        popup.title("Settings")
-        popup.geometry("320x180")
+        popup.title("Inversion & Mesh Settings")
+        popup.geometry("380x280")
         
-        tk.Label(popup, text="Lambda (Damping):").grid(row=0, column=0, padx=10, pady=10, sticky="w")
-        e_lam = tk.Entry(popup, width=10); e_lam.insert(0, str(self.lam_val.get())); e_lam.grid(row=0, column=1)
+        tk.Label(popup, text="Lambda (Damping):").grid(row=0, column=0, padx=10, pady=8, sticky="w")
+        e_lam = tk.Entry(popup, width=12); e_lam.insert(0, str(self.lam_val.get())); e_lam.grid(row=0, column=1)
         
-        tk.Label(popup, text="Z-Weight (Anisotropy):").grid(row=1, column=0, padx=10, pady=10, sticky="w")
-        e_z = tk.Entry(popup, width=10); e_z.insert(0, str(self.z_weight.get())); e_z.grid(row=1, column=1)
+        tk.Label(popup, text="Z-Weight (Anisotropy):").grid(row=1, column=0, padx=10, pady=8, sticky="w")
+        e_z = tk.Entry(popup, width=12); e_z.insert(0, str(self.z_weight.get())); e_z.grid(row=1, column=1)
         
-        tk.Label(popup, text="Max Depth / Profondità (m):").grid(row=2, column=0, padx=10, pady=10, sticky="w")
-        e_dep = tk.Entry(popup, width=10); e_dep.insert(0, str(self.max_depth.get())); e_dep.grid(row=2, column=1)
+        tk.Label(popup, text="Max Depth / Profondità (m):").grid(row=2, column=0, padx=10, pady=8, sticky="w")
+        e_dep = tk.Entry(popup, width=12); e_dep.insert(0, str(self.max_depth.get())); e_dep.grid(row=2, column=1)
+
+        tk.Label(popup, text="Char Length (Fine<0.1 - 1.0>Coarse):").grid(row=3, column=0, padx=10, pady=8, sticky="w")
+        e_cl = tk.Entry(popup, width=12); e_cl.insert(0, str(self.mesh_cl.get())); e_cl.grid(row=3, column=1)
+
+        chk_refine = tk.Checkbutton(popup, text="Refine Mesh", variable=self.mesh_refine)
+        chk_refine.grid(row=4, column=0, columnspan=2, pady=5)
         
         def save():
             try: 
                 self.lam_val.set(float(e_lam.get()))
                 self.z_weight.set(float(e_z.get()))
                 self.max_depth.set(float(e_dep.get()))
+                self.mesh_cl.set(float(e_cl.get()))
                 popup.destroy()
             except: pass
-        tk.Button(popup, text="Salva", command=save, width=12).grid(row=3, column=0, columnspan=2, pady=10)
+        tk.Button(popup, text="Salva", command=save, width=15, bg="#2196F3", fg="white").grid(row=5, column=0, columnspan=2, pady=15)
 
     def set_ip_cutoff(self):
         val = simpledialog.askfloat("I.P. Cutoff", "Minimo valore di I.P. (mV/V) accettabile:", initialvalue=self.ip_cutoff.get())
@@ -272,7 +287,7 @@ class PolaresApp:
             self.raw_data.removeInvalid()
             self.lbl_status.config(text=f"Rimossi {len(to_remove)} punti visivamente.")
 
-    # --- INVERSIONE RISOLTA: NESSUN ERRORE SUL METODO .DIM ---
+    # --- INVERSIONE ---
     def run_inversion_thread(self):
         if not self.raw_data: return
         self.btn_run.config(state="disabled")
@@ -283,25 +298,23 @@ class PolaresApp:
     def process_inversion(self):
         try:
             is_robust = (self.inv_method.get() == "L1")
-            max_d = self.max_depth.get() # Estrae la profondità desiderata dal menu
+            max_d = self.max_depth.get() 
+            para_dx = self.mesh_cl.get()
+            quality = 34.5 if self.mesh_refine.get() else 33.5 # Regola la finezza
             
-            # Applica matematicamente le quote topografiche direttamente ai picchetti
             if self.topo_filepath:
                 topo_data = np.loadtxt(self.topo_filepath)
-                # Assicura che la matrice X sia ordinata in modo crescente per l'interpolazione
                 topo_data = topo_data[topo_data[:, 0].argsort()]
-                
                 for i in range(self.raw_data.sensorCount()):
                     pos = self.raw_data.sensorPosition(i)
-                    z_val = np.interp(pos[0], topo_data[:, 0], topo_data[:, 1]) # Estrapola Z su X
+                    z_val = np.interp(pos[0], topo_data[:, 0], topo_data[:, 1]) 
                     self.raw_data.setSensorPosition(i, [pos[0], z_val, pos[2]])
 
-            # Il Manager crea la mesh in automatico usando i picchetti. 
             self.mgr = ert.ERTManager(self.raw_data)
                 
-            # 'paraDepth' ordina a pyGIMLi di troncare la profondità massima della mesh
             self.mgr.invert(lam=self.lam_val.get(), zWeight=self.z_weight.get(), robustData=is_robust, 
-                            blockyModel=is_robust, paraDepth=max_d, maxIter=10, verbose=False)
+                            blockyModel=is_robust, paraDepth=max_d, paraDX=para_dx, quality=quality, 
+                            maxIter=10, verbose=False)
             
             self.current_response = self.mgr.inv.response
             self.root.after(0, self.on_inversion_complete)
@@ -322,7 +335,6 @@ class PolaresApp:
         self.lbl_status.config(text="Errore.", fg="red")
         messagebox.showerror("Errore", error_msg)
 
-    # --- ESTRAZIONE SEZIONE 1D ---
     def extract_1d_section(self):
         if not self.mgr: return
         x_val = simpledialog.askfloat("Sezione 1D", "Inserisci la coordinata X (metri) dove estrarre la colonna virtuale:")
@@ -343,13 +355,20 @@ class PolaresApp:
             plt.xscale('log')
             plt.show()
 
-    # --- MOTORE GRAFICO CON TAGLIO DELLA PROFONDITÀ ---
+    # --- MOTORE GRAFICO STILE RESIPY CON PANNELLO INTERATTIVO E NUMERI REALI ---
     def show_custom_plots(self):
         if not self.mgr: return
         plt.close('all')
         
-        fig, axs = plt.subplots(3, 1, figsize=(12, 10), sharex=True, dpi=100)
+        # Inizializza la figura con spazio a destra per la colorbar e in basso per i controlli
+        fig = plt.figure(figsize=(14, 10))
         fig.canvas.manager.set_window_title('Risultati Inversione (Stile ResIPy)')
+        self.current_fig = fig
+        
+        ax1 = fig.add_axes([0.08, 0.70, 0.75, 0.22])
+        ax2 = fig.add_axes([0.08, 0.42, 0.75, 0.22], sharex=ax1)
+        ax3 = fig.add_axes([0.08, 0.14, 0.75, 0.22], sharex=ax1)
+        cbar_ax = fig.add_axes([0.86, 0.14, 0.02, 0.78]) # Barra Verticale a destra
         
         data = self.mgr.data
         x_centers, z_pseudo = [], []
@@ -359,67 +378,131 @@ class PolaresApp:
             z_pseudo.append(max(abs(a-b), abs(a-m), abs(a-n), abs(b-m), abs(b-n), abs(m-n)) * 0.25)
 
         rhoa_m = np.array(data('rhoa'))
-        try:
-            rhoa_c = np.array(self.mgr.inv.response)
-        except:
-            rhoa_c = rhoa_m
-            
+        try: rhoa_c = np.array(self.mgr.inv.response)
+        except: rhoa_c = rhoa_m
         model_rho = np.array(self.mgr.model)
         
-        # CALCOLO LIMITI ROBUSTI
+        # Limiti Iniziali (Percentili Robusti)
         all_vals = np.concatenate((rhoa_m, rhoa_c, model_rho))
-        min_rho = np.percentile(all_vals, 2)
-        max_rho = np.percentile(all_vals, 98)
-        if min_rho <= 0: min_rho = np.min(all_vals[all_vals > 0])
-        
-        res_cmap = plt.get_cmap('seismic', 15)
-        levels = np.logspace(np.log10(min_rho), np.log10(max_rho), 15)
-        unified_norm = LogNorm(vmin=min_rho, vmax=max_rho)
+        init_min = np.percentile(all_vals, 2)
+        init_max = np.percentile(all_vals, 98)
+        if init_min <= 0: init_min = np.min(all_vals[all_vals > 0])
 
-        triang = tri.Triangulation(x_centers, z_pseudo)
+        # Prepara la mesh per il modello inverso
+        mesh = self.mgr.paraDomain
+        node_x = np.array([n.pos()[0] for n in mesh.nodes()])
+        node_z = np.array([n.pos()[1] for n in mesh.nodes()])
+        node_rho = np.array(pg.interpolate(mesh, model_rho, mesh.positions()))
+        
+        triang_pseudo = tri.Triangulation(x_centers, z_pseudo)
+        triang_model = tri.Triangulation(node_x, node_z)
+        
+        # Coordinate per il taglio (Crop)
+        x_min_data = np.min([data.sensorPosition(i)[0] for i in range(data.sensorCount())])
+        x_max_data = np.max([data.sensorPosition(i)[0] for i in range(data.sensorCount())])
 
-        max_d = self.max_depth.get()
+        # --- WIDGETS INTERATTIVI IN BASSO ---
+        ax_vmin = fig.add_axes([0.15, 0.03, 0.1, 0.04])
+        txt_vmin = TextBox(ax_vmin, 'Min Rho: ', initial=f"{init_min:.1f}")
 
-        # 1. Measured Data 
-        tc1 = axs[0].tricontourf(triang, rhoa_m, levels=levels, cmap=res_cmap, norm=unified_norm, extend='both')
-        axs[0].set_ylim(bottom=max_d, top=0) # VINCOLO VISIVO
-        axs[0].set_title("1. Measured Apparent Resistivity", fontsize=11)
-        axs[0].set_ylabel("Ps. Depth (m)")
-        
-        # 2. Calculated Data
-        tc2 = axs[1].tricontourf(triang, rhoa_c, levels=levels, cmap=res_cmap, norm=unified_norm, extend='both')
-        axs[1].set_ylim(bottom=max_d, top=0) # VINCOLO VISIVO
-        axs[1].set_title("2. Calculated Apparent Resistivity", fontsize=11)
-        axs[1].set_ylabel("Ps. Depth (m)")
-        
-        # 3. Inverse Model
-        pg.show(self.mgr.paraDomain, self.mgr.model, ax=axs[2], cMap=res_cmap, 
-                cMin=min_rho, cMax=max_rho, logScale=True, colorBar=False, hold=True)
-        axs[2].set_title("3. Inverse Model Resistivity Section", fontsize=11)
-        axs[2].set_ylabel("Depth (m)")
-        axs[2].set_xlabel("Distance X (m)")
-        
-        # Se la topografia non è usata, forziamo il taglio visuale sulla Z della mesh
-        if not self.topo_filepath:
-            axs[2].set_ylim(bottom=-max_d, top=0)
+        ax_vmax = fig.add_axes([0.35, 0.03, 0.1, 0.04])
+        txt_vmax = TextBox(ax_vmax, 'Max Rho: ', initial=f"{init_max:.1f}")
+
+        ax_btn = fig.add_axes([0.48, 0.03, 0.08, 0.04])
+        btn_apply = Button(ax_btn, 'Apply')
+
+        ax_chk = fig.add_axes([0.60, 0.01, 0.23, 0.08])
+        chk = CheckButtons(ax_chk, ['Contour Lines', 'Crop Corners'], [True, False])
+
+        # Salviamo i widget in memoria per evitare che vengano rimossi dal garbage collector
+        fig.widgets = [txt_vmin, txt_vmax, btn_apply, chk]
+
+        def draw_all(event=None):
+            try:
+                v_min = float(txt_vmin.text)
+                v_max = float(txt_vmax.text)
+            except ValueError:
+                v_min, v_max = init_min, init_max
+                
+            if v_min >= v_max: v_max = v_min + 1.0
             
-        # Forza tutti i grafici ad avere la stessa larghezza
-        for ax in axs:
-            ax.set_aspect('auto')
-        
-        # Un'unica barra colori condivisa in basso
-        cbar_ax = fig.add_axes([0.15, 0.06, 0.7, 0.02])
-        fig.colorbar(tc1, cax=cbar_ax, orientation='horizontal', label="Resistivity (Ohm.m)")
+            show_contour = chk.get_status()[0]
+            crop_corners = chk.get_status()[1]
 
-        plt.subplots_adjust(left=0.1, right=0.95, top=0.95, bottom=0.15, hspace=0.35)
+            ax1.clear(); ax2.clear(); ax3.clear(); cbar_ax.clear()
+
+            res_cmap = plt.get_cmap('seismic')
+            norm = LogNorm(vmin=v_min, vmax=v_max)
+            
+            # Gestione Crop
+            if crop_corners:
+                depth = -triang_model.y
+                mask = (triang_model.x < x_min_data + depth) | (triang_model.x > x_max_data - depth)
+                tmask = np.any(mask[triang_model.triangles], axis=1)
+                triang_model.set_mask(tmask)
+            else:
+                triang_model.set_mask(None)
+
+            if show_contour:
+                levels = np.logspace(np.log10(v_min), np.log10(v_max), 20)
+                tc = ax1.tricontourf(triang_pseudo, rhoa_m, levels=levels, cmap=res_cmap, norm=norm, extend='both')
+                ax2.tricontourf(triang_pseudo, rhoa_c, levels=levels, cmap=res_cmap, norm=norm, extend='both')
+                ax3.tricontourf(triang_model, node_rho, levels=levels, cmap=res_cmap, norm=norm, extend='both')
+            else:
+                tc = ax1.tripcolor(triang_pseudo, rhoa_m, cmap=res_cmap, norm=norm, shading='gouraud')
+                ax2.tripcolor(triang_pseudo, rhoa_c, cmap=res_cmap, norm=norm, shading='gouraud')
+                ax3.tripcolor(triang_model, node_rho, cmap=res_cmap, norm=norm, shading='gouraud')
+
+            # Formatting
+            max_d = self.max_depth.get()
+            ax1.invert_yaxis()
+            ax1.set_ylim(bottom=max_d, top=0)
+            ax1.set_title("1. Measured Apparent Resistivity", fontsize=11)
+            ax1.set_ylabel("Ps. Depth (m)")
+            
+            ax2.invert_yaxis()
+            ax2.set_ylim(bottom=max_d, top=0)
+            ax2.set_title("2. Calculated Apparent Resistivity", fontsize=11)
+            ax2.set_ylabel("Ps. Depth (m)")
+            
+            if not self.topo_filepath:
+                ax3.set_ylim(bottom=-max_d, top=0)
+            ax3.set_title("3. Inverse Model Resistivity Section", fontsize=11)
+            ax3.set_ylabel("Depth (m)")
+            ax3.set_xlabel("Distance X (m)")
+
+            for ax in [ax1, ax2, ax3]: ax.set_aspect('auto')
+
+            # Colorbar formattata con Numeri Reali (Senza notazione scientifica)
+            def res_fmt(x, pos):
+                return f"{int(x)}" if x >= 10 else f"{x:.2f}"
+            
+            fmt = FuncFormatter(res_fmt)
+            cbar = fig.colorbar(tc, cax=cbar_ax, orientation='vertical', format=fmt)
+            cbar.set_label("Resistivity (ohm.m)", fontsize=11)
+            
+            fig.canvas.draw_idle()
+
+        # Collega i trigger
+        btn_apply.on_clicked(draw_all)
+        chk.on_clicked(draw_all)
+
+        # Prima esecuzione
+        draw_all()
         plt.show()
 
     def export_image(self):
         if not self.mgr: return
         file_path = filedialog.asksaveasfilename(defaultextension=".png", filetypes=[("PNG", "*.png")])
         if file_path:
-            self.show_custom_plots()
-            plt.savefig(file_path, dpi=300, bbox_inches='tight')
+            # Rimuove temporaneamente i widgets prima di salvare per una foto pulita
+            if self.current_fig:
+                for w in self.current_fig.widgets:
+                    if hasattr(w, 'ax'): w.ax.set_visible(False)
+                self.current_fig.savefig(file_path, dpi=300, bbox_inches='tight')
+                for w in self.current_fig.widgets:
+                    if hasattr(w, 'ax'): w.ax.set_visible(True)
+                messagebox.showinfo("Salvato", "Immagine salvata con successo!")
 
     def export_vtk(self):
         if not self.mgr: return
