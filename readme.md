@@ -1,74 +1,44 @@
-
 # PolaresInversion
 
-**PolaresInversion** is a professional geophysical software tool designed for the 2D inversion, processing, and visualization of Electrical Resistivity Tomography (ERT) data. Specifically tailored to handle the native output data format of the **POLARES 32** instrument, the software provides a seamless desktop workflow from raw data optimization to final cross-section visualization.
+**PolaresInversion** is a professional-grade geoelectrical tool designed for 2D processing, inversion, and advanced visualization of Electrical Resistivity Tomography (ERT) datasets. Tailored explicitly around the native output structures of the **POLARES 32** imaging tool, it bridges raw data acquisition with highly polished, deployment-ready tomographic cross-sections.
 
-![Version](https://img.shields.io/badge/version-1.0-blue)
+![Version](https://img.shields.io/badge/version-2.5.0-blue)
 ![Python](https://img.shields.io/badge/python-3.12-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ---
 
-## 🚀 Key Features
+## 🚀 Core Capabilities
 
-* **Native Data Import:** Direct parsing of POLARES `.dat` files (General Array format).
-* **Data Filtering & Editing:**
-    * Visual detection and removal of noisy/spurious points (*Exterminate bad data points*).
-    * Profile spatial transformations: electrode shifting (*Shift X*) and layout mirroring (*Flip X*).
-    * Dataset trimming (*Trim*) and localized window exclusions (*Exclude range*).
-* **Advanced 2D Inversion:** Powered by robust optimization algorithms supporting both **Smoothness-constrained (L2)** and **Robust/Blocky (L1)** inversion methods.
-* **Topographic Constraints:** Load custom elevation files (X, Z) to seamlessly adapt the finite element mesh to real-world topography.
-* **Depth Control:** User-defined maximum analysis depth limits directly integrated into the mesh generation and visual axis controls.
-* **Commercial-Grade Visualization:** High-fidelity 3-panel plotting matching industry standards (such as RES2DINV or ResIPy):
-    * Measured and calculated apparent resistivity pseudosections.
-    * Real inverted model resistivity depth sections.
-    * Standardized **Seismic** (Red-White-Blue) logarithmic discrete colormap with automated robust clipping (2nd/98th percentiles) to prevent color scale saturation.
-* **Professional Exporting:** Save figures as high-resolution `.png` images and export 2D/3D inversion meshes into `.vtk` format for advanced processing in QGIS or ParaView.
+* **General Array File Parsing:** Direct import of structural `.dat` configuration assets exported by POLARES hardware arrays.
+* **Dynamic Visualization GUI:** Interactive, industry-standard multi-panel canvas featuring:
+    * Measured apparent resistivity pseudosection grid mapping.
+    * Forward-calculated structural response cross-sections.
+    * Finished subsurface FEM model tomographies.
+* **Advanced UI Controls:** Live in-plot widgets to change boundary thresholds (`Min/Max Rho`) instantly, alongside toggle switches for `Contour Lines` and trapezoidal geometric filtering (`Crop Corners`).
+* **ResIPy-Style Mesh Control:** Accessible parameter configuration menus detailing damping factors (`Lambda`), vertical weight constraints (`Z-Weight`), maximum depth profiles, and customizable finite-element triangular setups via `Characteristic Length` and boundary refinement (`Refine Mesh`).
+* **Clean Numerical Legends:** Absolute colorbars mapped onto a vertical right-hand sidebar layout utilizing standard linear integer notation rather than scientific exponential symbols.
+* **Professional Grade Exporting:** Direct extraction of high-resolution `.png` images and structural `.vtk` geometry layers built for rapid import into QGIS or ParaView pipelines.
 
 ---
 
-## 🛠️ Built With
+## 🛠️ Software Architecture
 
-The software is written in Python, leveraging a robust scientific open-source stack:
-* **pyGIMLi**: Core computational physics library for modeling and inversion using Finite Element Methods (FEM).
-* **Matplotlib**: Desktop and layout graphic engine for geophysical plotting.
-* **NumPy**: Multidimensional array mapping and matrix calculations.
-* **Tkinter**: Fast and lightweight desktop Graphical User Interface (GUI).
+The workflow is written natively in Python, deploying a robust scientific framework:
+* **pyGIMLi**: Advanced multi-method modeling engine using Finite Element Methods (FEM).
+* **Matplotlib**: Flexible plotting engine handling custom subplots and embedded graphical input widgets.
+* **NumPy**: Low-level high-performance array management.
+* **Tkinter**: Lightweight standalone desktop GUI.
 
 ---
 
-## 📦 Getting Started
+## 📦 Distribution & Setup
 
-### For End Users (Windows Standalone)
-Go to the **[Releases](https://github.com/FNX996/InGeoLab/releases)** section on the right side of this repository, download `PolaresInvert.exe`, and run it directly. No Python installation or background configuration is required.
+### Windows Standalone Executive (Recommended)
+Navigate to the **[Releases](https://github.com/FNX996/InGeoLab/releases)** framework on the right sidebar, download the standalone compilation `PolaresInvert.exe`, and launch the asset directly. No local Python runtime or library installations are required.
 
-### For Developers (Running from Source)
-1. Ensure you have Python 3.12+ installed on your machine.
-2. Clone this repository:
+### Developer Environment Setup
+1. Verify a local running setup of Python 3.12+.
+2. Clone this repository structure:
    ```bash
    git clone [https://github.com/FNX996/InGeoLab.git](https://github.com/FNX996/InGeoLab.git)
-
-    Install the required dependencies:
-    Bash
-
-    pip install pygimli matplotlib numpy
-
-    Run the application:
-    Bash
-
-    python PolaresInvert.py
-
-    (Optional) Recompile the executable using the provided automation script:
-    Bash
-
-    build_exe.bat
-
-👨‍💻 Author
-
-    Fabrizio Nori - InGeoLab s.r.l.
-
-    GitHub Profile: @FNX996
-
-📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
