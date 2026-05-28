@@ -34,21 +34,35 @@ The workflow is written natively in Python, deploying a robust scientific framew
 
 ## 📦 Distribution & Setup
 
-### Windows Standalone Executive (Recommended)
-Navigate to the **[Releases](https://github.com/FNX996/InGeoLab/releases)** framework on the right sidebar, download the standalone compilation `PolaresInvert.exe`, and launch the asset directly. No local Python runtime or library installations are required.
+### Windows Standalone Executable (Recommended)
+Navigate to the **Releases** framework on the right sidebar, download the standalone compilation `PolaresInvert.exe`, and launch the asset directly. No local Python runtime or library installations are required.
 
 ### Developer Environment Setup
 1. Verify a local running setup of Python 3.12+.
 2. Clone this repository structure:
    ```bash
    git clone [https://github.com/FNX996/InGeoLab.git](https://github.com/FNX996/InGeoLab.git)
-3. Install missing library components:
-   pip install pygimli matplotlib numpy
-4. Run the code
-   python PolaresInvert.py
+
+    Install missing library components:
+    Bash
+
+    pip install pygimli matplotlib numpy
+
+    Run the code:
+    Bash
+
+    python PolaresInvert.py
 
 👨‍💻 Author Info
 
     Fabrizio Nori - InGeoLab s.r.l.
 
     GitHub Profile: @FNX996
+
+    Web: https://github.com/FNX996
+
+📄 License
+
+This project is licensed under the MIT License:
+
+Copyright (c) 2026 Fabrizio Nori - InGeoLab s.r.l.
