@@ -2,7 +2,7 @@ Markdown
 
 # PolaresInversion
 
-**PolaresInversion** is a professional-grade geoelectrical tool designed for 2D processing, inversion, and advanced visualization of Electrical Resistivity Tomography (ERT) datasets. Tailored explicitly around the native output structures of the **POLARES 32** imaging tool, it bridges raw data acquisition with highly polished, deployment-ready tomographic cross-sections.
+**PolaresInversion** is a amateur-grade geoelectrical tool designed for 2D processing, inversion, and advanced visualization of Electrical Resistivity Tomography (ERT) datasets. Tailored explicitly around the native output structures of the **POLARES 32** imaging tool, it bridges raw data acquisition with highly polished, deployment-ready tomographic cross-sections.
 
 ![Version](https://img.shields.io/badge/version-3.0.0-blue)
 ![Python](https://img.shields.io/badge/python-3.12-blue)
