@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog
+from tkinter import ttk
 import numpy as np
 import pygimli as pg
 from pygimli.physics import ert
@@ -8,22 +9,42 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 import matplotlib.tri as tri
 from matplotlib.widgets import TextBox, Button, CheckButtons
-from matplotlib.ticker import FuncFormatter  # Aggiunto per formattare i numeri della colorbar
+from matplotlib.ticker import FuncFormatter
 import webbrowser
 
 class PolaresApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Inversione Geoelettrica POLARES 32 - Ultimate Edition")
-        self.root.geometry("450x280")
+        self.root.title("PolaresInversion - Ultimate Edition")
         self.root.resizable(False, False)
+        self.root.configure(bg="#F4F6F9")
         
+        # --- SPLASH SCREEN (Schermata di Caricamento) ---
+        self.root.withdraw() # Nasconde la finestra principale
+        self.splash = tk.Toplevel(self.root)
+        self.splash.overrideredirect(True)
+        self.splash.configure(bg="#1E1E2E")
+        
+        # Centra lo splash screen
+        sw = self.root.winfo_screenwidth()
+        sh = self.root.winfo_screenheight()
+        w, h = 540, 320
+        x, y = int(sw/2 - w/2), int(sh/2 - h/2)
+        self.splash.geometry(f"{w}x{h}+{x}+{y}")
+        
+        tk.Label(self.splash, text="POLARES", font=("Segoe UI Black", 42), bg="#1E1E2E", fg="#89B4FA").pack(pady=(60, 0))
+        tk.Label(self.splash, text="INVERSION", font=("Segoe UI", 20, "bold"), bg="#1E1E2E", fg="#F5E0DC").pack(pady=(0, 10))
+        tk.Label(self.splash, text="Versione 3.0.0", font=("Segoe UI", 12), bg="#1E1E2E", fg="#A6ADC8").pack()
+        
+        tk.Label(self.splash, text="by Fabrizio Nori - InGeoLab s.r.l.", font=("Segoe UI", 10), bg="#1E1E2E", fg="#585B70").pack(side=tk.BOTTOM, pady=20)
+        
+        # --- VARIABILI LOGICHE ---
         self.filepath = None
         self.topo_filepath = None
         self.raw_data = None 
         self.mgr = None
+        self.current_fig = None 
         
-        # Variabili di inversione e IP
         self.inv_method = tk.StringVar(value="L2")
         self.lam_val = tk.DoubleVar(value=20.0)
         self.z_weight = tk.DoubleVar(value=1.0)
@@ -31,23 +52,41 @@ class PolaresApp:
         self.ip_enabled = tk.BooleanVar(value=False)
         self.ip_cutoff = tk.DoubleVar(value=0.5)
 
-        # Nuove variabili Mesh stile ResIPy
-        self.mesh_cl = tk.DoubleVar(value=0.3) # Characteristic Length (paraDX)
-        self.mesh_refine = tk.BooleanVar(value=False) # Refine Mesh
+        self.mesh_cl = tk.DoubleVar(value=0.3)
+        self.mesh_refine = tk.BooleanVar(value=False)
+        self.mesh_quality = tk.DoubleVar(value=34.0)
+        self.mesh_area = tk.DoubleVar(value=0.0) 
+        self.plot_vmin = tk.DoubleVar(value=0.0) 
+        self.plot_vmax = tk.DoubleVar(value=0.0) 
 
+        # Esegue il passaggio alla GUI principale dopo 3 secondi
+        self._build_main_gui()
+        self.root.after(3000, self._close_splash_and_start)
+
+    def _close_splash_and_start(self):
+        self.splash.destroy()
+        # Centra la finestra principale
+        w, h = 480, 360
+        sw = self.root.winfo_screenwidth()
+        sh = self.root.winfo_screenheight()
+        x, y = int(sw/2 - w/2), int(sh/2 - h/2)
+        self.root.geometry(f"{w}x{h}+{x}+{y}")
+        self.root.deiconify()
+
+    def _build_main_gui(self):
         # --- BARRA DEI MENU ---
         self.menubar = tk.Menu(self.root)
         self.root.config(menu=self.menubar)
 
-        # 1. File
         self.file_menu = tk.Menu(self.menubar, tearoff=0)
         self.file_menu.add_command(label="Apri file dati POLARES (.dat)...", command=self.load_file)
         self.file_menu.add_separator()
         self.file_menu.add_command(label="Salva Immagine Grafici (.png)", command=self.export_image, state="disabled")
         self.file_menu.add_command(label="Esporta Modello per QGIS (.vtk)", command=self.export_vtk, state="disabled")
+        self.file_menu.add_separator()
+        self.file_menu.add_command(label="Esci", command=self.root.quit)
         self.menubar.add_cascade(label="File", menu=self.file_menu)
 
-        # 2. Edit
         self.edit_menu = tk.Menu(self.menubar, tearoff=0)
         self.edit_menu.add_command(label="Exterminate bad data points (Visivo)", command=self.filter_bad_data, state="disabled")
         self.edit_menu.add_command(label="Exclude data points in X range", command=self.exclude_range, state="disabled")
@@ -56,92 +95,116 @@ class PolaresApp:
         self.edit_menu.add_command(label="Change first electrode location (Shift X)", command=self.change_start_pos, state="disabled")
         self.menubar.add_cascade(label="Edit", menu=self.edit_menu)
 
-        # 3. Topography
         self.topo_menu = tk.Menu(self.menubar, tearoff=0)
         self.topo_menu.add_command(label="Load topography data (X Z)...", command=self.load_topo)
         self.topo_menu.add_command(label="Clear topography", command=self.clear_topo)
         self.menubar.add_cascade(label="Topography", menu=self.topo_menu)
 
-        # 4. Inversion & IP
         self.inv_menu = tk.Menu(self.menubar, tearoff=0)
         self.inv_menu.add_command(label="Inversion methods and settings...", command=self.open_settings)
-        
-        self.ip_menu = tk.Menu(self.inv_menu, tearoff=0)
-        self.ip_menu.add_checkbutton(label="Enable I.P. Inversion (Chargeability)", variable=self.ip_enabled)
-        self.ip_menu.add_command(label="Cutoff for valid I.P. values...", command=self.set_ip_cutoff)
-        self.inv_menu.add_cascade(label="I.P. options", menu=self.ip_menu)
-        
         self.inv_menu.add_separator()
         self.inv_menu.add_radiobutton(label="Smoothness-constrained (L2)", variable=self.inv_method, value="L2")
         self.inv_menu.add_radiobutton(label="Robust / Blocky (L1)", variable=self.inv_method, value="L1")
         self.menubar.add_cascade(label="Inversion", menu=self.inv_menu)
 
-        # 5. Tools & Display
         self.tools_menu = tk.Menu(self.menubar, tearoff=0)
         self.tools_menu.add_command(label="Mostra grafici a 3 pannelli", command=self.show_custom_plots, state="disabled")
         self.tools_menu.add_separator()
         self.tools_menu.add_command(label="Estrai Profilo Stratigrafico (Sezione 1D)...", command=self.extract_1d_section, state="disabled")
         self.menubar.add_cascade(label="Display & Tools", menu=self.tools_menu)
 
-        # 6. Info
         self.info_menu = tk.Menu(self.menubar, tearoff=0)
         self.info_menu.add_command(label="About PolaresInversion...", command=self.show_about)
         self.menubar.add_cascade(label="Info", menu=self.info_menu)
 
-        # --- INTERFACCIA ---
-        self.btn_load = tk.Button(self.root, text="1. Seleziona file .dat", command=self.load_file, width=25, font=("Arial", 10, "bold"))
-        self.btn_load.pack(pady=15)
-        self.lbl_file = tk.Label(self.root, text="Nessun file selezionato", fg="gray")
-        self.lbl_file.pack()
-        self.lbl_topo = tk.Label(self.root, text="Topografia: Nessuna", fg="gray")
-        self.lbl_topo.pack()
-        self.btn_run = tk.Button(self.root, text="2. Esegui Inversione", command=self.run_inversion_thread, state="disabled", width=25, bg="#4CAF50", fg="white", font=("Arial", 10, "bold"))
-        self.btn_run.pack(pady=15)
-        self.lbl_status = tk.Label(self.root, text="", fg="blue")
-        self.lbl_status.pack()
+        # --- AREA DI LAVORO PRINCIPALE ---
+        main_frame = tk.Frame(self.root, bg="#F4F6F9")
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=40, pady=25)
+
+        tk.Label(main_frame, text="Area di Lavoro", font=("Segoe UI", 16, "bold"), bg="#F4F6F9", fg="#2C3E50").pack(pady=(0, 20))
+
+        self.btn_load = tk.Button(main_frame, text="📁 1. Seleziona file .dat", command=self.load_file, 
+                                  bg="#3B82F6", fg="white", font=("Segoe UI", 11, "bold"), 
+                                  relief="flat", cursor="hand2", pady=8, activebackground="#2563EB", activeforeground="white")
+        self.btn_load.pack(fill=tk.X, pady=(0, 5))
         
-        self.current_fig = None # Per mantenere vivi i widget matplotlib
+        self.lbl_file = tk.Label(main_frame, text="Nessun file selezionato", font=("Segoe UI", 9, "italic"), bg="#F4F6F9", fg="#7F8C8D")
+        self.lbl_file.pack(pady=(0, 5))
+        
+        self.lbl_topo = tk.Label(main_frame, text="Topografia: Nessuna", font=("Segoe UI", 9), bg="#F4F6F9", fg="#7F8C8D")
+        self.lbl_topo.pack(pady=(0, 20))
+
+        self.btn_run = tk.Button(main_frame, text="⚙️ 2. Esegui Inversione", command=self.run_inversion_thread, 
+                                 state="disabled", bg="#9CA3AF", fg="white", font=("Segoe UI", 11, "bold"), 
+                                 relief="flat", pady=8, activebackground="#059669", activeforeground="white")
+        self.btn_run.pack(fill=tk.X, pady=(0, 10))
+
+        self.lbl_status = tk.Label(main_frame, text="In attesa dei dati...", font=("Segoe UI", 10, "bold"), bg="#F4F6F9", fg="#9CA3AF")
+        self.lbl_status.pack()
 
     # --- ABOUT ---
     def show_about(self):
         about_win = tk.Toplevel(self.root)
-        about_win.title("About")
-        about_win.geometry("400x300")
+        about_win.title("About PolaresInversion")
+        about_win.geometry("420x360")
+        about_win.configure(bg="#F4F6F9")
         
-        tk.Label(about_win, text="PolaresInversion", font=("Arial", 14, "bold")).pack(pady=(15, 0))
-        tk.Label(about_win, text="by Fabrizio Nori - InGeoLab s.r.l.", font=("Arial", 11, "italic")).pack(pady=(0, 5))
-        tk.Label(about_win, text="Versione 2.5.0", font=("Arial", 10)).pack(pady=(0, 10))
+        tk.Label(about_win, text="POLARES", font=("Segoe UI Black", 24), bg="#F4F6F9", fg="#3B82F6").pack(pady=(25, 0))
+        tk.Label(about_win, text="INVERSION", font=("Segoe UI", 16, "bold"), bg="#F4F6F9", fg="#2C3E50").pack(pady=(0, 5))
+        tk.Label(about_win, text="Versione 3.0.0", font=("Segoe UI", 11), bg="#F4F6F9", fg="#7F8C8D").pack(pady=(0, 15))
         
-        tk.Label(about_win, text="Librerie Open Source Utilizzate:", font=("Arial", 9, "bold")).pack()
-        libs_text = "• Python 3\n• pyGIMLi (Core FEM)\n• Matplotlib & NumPy (Grafica e Matrici)\n• Tkinter (Interfaccia GUI)"
-        tk.Label(about_win, text=libs_text, font=("Arial", 9), justify="left").pack(pady=5)
+        tk.Label(about_win, text="Librerie Open Source:", font=("Segoe UI", 10, "bold"), bg="#F4F6F9").pack()
+        libs_text = "Python 3 • pyGIMLi (Core FEM)\nMatplotlib & NumPy • Tkinter"
+        tk.Label(about_win, text=libs_text, font=("Segoe UI", 10), bg="#F4F6F9", fg="#34495E").pack(pady=5)
         
-        link_lbl = tk.Label(about_win, text="GitHub: https://github.com/FNX996", font=("Arial", 10, "underline"), fg="blue", cursor="hand2")
+        tk.Label(about_win, text="Sviluppato da:", font=("Segoe UI", 10, "bold"), bg="#F4F6F9").pack(pady=(15, 0))
+        tk.Label(about_win, text="Fabrizio Nori - InGeoLab s.r.l.", font=("Segoe UI", 10, "italic"), bg="#F4F6F9", fg="#2C3E50").pack()
+        
+        link = "https://github.com/FNX996"
+        link_lbl = tk.Label(about_win, text=f"GitHub: {link}", font=("Segoe UI", 10, "underline"), bg="#F4F6F9", fg="#3B82F6", cursor="hand2")
         link_lbl.pack(pady=10)
-        link_lbl.bind("<Button-1>", lambda e: webbrowser.open_new("https://github.com/FNX996"))
+        link_lbl.bind("<Button-1>", lambda e: webbrowser.open_new(link))
         
-        tk.Button(about_win, text="Chiudi", command=about_win.destroy, width=15).pack(pady=5)
+        tk.Button(about_win, text="Chiudi", command=about_win.destroy, width=15, bg="#9CA3AF", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", pady=5).pack(pady=10)
 
-    # --- FUNZIONI IMPOSTAZIONI VIA MENU ---
+    # --- IMPOSTAZIONI ---
     def open_settings(self):
         popup = tk.Toplevel(self.root)
-        popup.title("Inversion & Mesh Settings")
-        popup.geometry("380x280")
+        popup.title("Impostazioni Avanzate")
+        popup.geometry("450x490")
+        popup.configure(bg="#F4F6F9")
         
-        tk.Label(popup, text="Lambda (Damping):").grid(row=0, column=0, padx=10, pady=8, sticky="w")
-        e_lam = tk.Entry(popup, width=12); e_lam.insert(0, str(self.lam_val.get())); e_lam.grid(row=0, column=1)
+        tk.Label(popup, text="Impostazioni Inversione & Mesh", font=("Segoe UI", 14, "bold"), bg="#F4F6F9", fg="#2C3E50").grid(row=0, column=0, columnspan=2, pady=(15, 15))
         
-        tk.Label(popup, text="Z-Weight (Anisotropy):").grid(row=1, column=0, padx=10, pady=8, sticky="w")
-        e_z = tk.Entry(popup, width=12); e_z.insert(0, str(self.z_weight.get())); e_z.grid(row=1, column=1)
+        lbl_font = ("Segoe UI", 10)
+        entry_kwargs = {"width": 14, "font": ("Segoe UI", 10)}
         
-        tk.Label(popup, text="Max Depth / Profondità (m):").grid(row=2, column=0, padx=10, pady=8, sticky="w")
-        e_dep = tk.Entry(popup, width=12); e_dep.insert(0, str(self.max_depth.get())); e_dep.grid(row=2, column=1)
+        tk.Label(popup, text="Lambda (Damping):", font=lbl_font, bg="#F4F6F9").grid(row=1, column=0, padx=30, pady=6, sticky="w")
+        e_lam = ttk.Entry(popup, **entry_kwargs); e_lam.insert(0, str(self.lam_val.get())); e_lam.grid(row=1, column=1)
+        
+        tk.Label(popup, text="Z-Weight (Anisotropy):", font=lbl_font, bg="#F4F6F9").grid(row=2, column=0, padx=30, pady=6, sticky="w")
+        e_z = ttk.Entry(popup, **entry_kwargs); e_z.insert(0, str(self.z_weight.get())); e_z.grid(row=2, column=1)
+        
+        tk.Label(popup, text="Max Depth / Profondità (m):", font=lbl_font, bg="#F4F6F9").grid(row=3, column=0, padx=30, pady=6, sticky="w")
+        e_dep = ttk.Entry(popup, **entry_kwargs); e_dep.insert(0, str(self.max_depth.get())); e_dep.grid(row=3, column=1)
 
-        tk.Label(popup, text="Char Length (Fine<0.1 - 1.0>Coarse):").grid(row=3, column=0, padx=10, pady=8, sticky="w")
-        e_cl = tk.Entry(popup, width=12); e_cl.insert(0, str(self.mesh_cl.get())); e_cl.grid(row=3, column=1)
+        tk.Label(popup, text="Char Length (Fine<0.1-1.0>Coarse):", font=lbl_font, bg="#F4F6F9").grid(row=4, column=0, padx=30, pady=6, sticky="w")
+        e_cl = ttk.Entry(popup, **entry_kwargs); e_cl.insert(0, str(self.mesh_cl.get())); e_cl.grid(row=4, column=1)
+        
+        tk.Label(popup, text="Mesh Quality (es. 34.0):", font=lbl_font, bg="#F4F6F9").grid(row=5, column=0, padx=30, pady=6, sticky="w")
+        e_mq = ttk.Entry(popup, **entry_kwargs); e_mq.insert(0, str(self.mesh_quality.get())); e_mq.grid(row=5, column=1)
 
-        chk_refine = tk.Checkbutton(popup, text="Refine Mesh", variable=self.mesh_refine)
-        chk_refine.grid(row=4, column=0, columnspan=2, pady=5)
+        tk.Label(popup, text="Mesh Max Area (0=Auto):", font=lbl_font, bg="#F4F6F9").grid(row=6, column=0, padx=30, pady=6, sticky="w")
+        e_ma = ttk.Entry(popup, **entry_kwargs); e_ma.insert(0, str(self.mesh_area.get())); e_ma.grid(row=6, column=1)
+
+        tk.Label(popup, text="Plot Resistivity MIN (0=Auto):", font=lbl_font, bg="#F4F6F9").grid(row=7, column=0, padx=30, pady=6, sticky="w")
+        e_vmin = ttk.Entry(popup, **entry_kwargs); e_vmin.insert(0, str(self.plot_vmin.get())); e_vmin.grid(row=7, column=1)
+
+        tk.Label(popup, text="Plot Resistivity MAX (0=Auto):", font=lbl_font, bg="#F4F6F9").grid(row=8, column=0, padx=30, pady=6, sticky="w")
+        e_vmax = ttk.Entry(popup, **entry_kwargs); e_vmax.insert(0, str(self.plot_vmax.get())); e_vmax.grid(row=8, column=1)
+
+        chk_refine = tk.Checkbutton(popup, text="Refine Mesh (Affina i bordi)", variable=self.mesh_refine, font=lbl_font, bg="#F4F6F9", activebackground="#F4F6F9", cursor="hand2")
+        chk_refine.grid(row=9, column=0, columnspan=2, pady=10)
         
         def save():
             try: 
@@ -149,9 +212,14 @@ class PolaresApp:
                 self.z_weight.set(float(e_z.get()))
                 self.max_depth.set(float(e_dep.get()))
                 self.mesh_cl.set(float(e_cl.get()))
+                self.mesh_quality.set(float(e_mq.get()))
+                self.mesh_area.set(float(e_ma.get()))
+                self.plot_vmin.set(float(e_vmin.get()))
+                self.plot_vmax.set(float(e_vmax.get()))
                 popup.destroy()
             except: pass
-        tk.Button(popup, text="Salva", command=save, width=15, bg="#2196F3", fg="white").grid(row=5, column=0, columnspan=2, pady=15)
+            
+        tk.Button(popup, text="Salva Impostazioni", command=save, width=20, bg="#10B981", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", pady=6).grid(row=10, column=0, columnspan=2, pady=15)
 
     def set_ip_cutoff(self):
         val = simpledialog.askfloat("I.P. Cutoff", "Minimo valore di I.P. (mV/V) accettabile:", initialvalue=self.ip_cutoff.get())
@@ -162,12 +230,12 @@ class PolaresApp:
         file_path = filedialog.askopenfilename(filetypes=[("File POLARES", "*.dat"), ("Tutti i file", "*.*")])
         if file_path:
             self.filepath = file_path
-            self.lbl_file.config(text=self.filepath.split('/')[-1], fg="black")
+            self.lbl_file.config(text=self.filepath.split('/')[-1], fg="#34495E")
             try:
                 self.raw_data = self.parse_dat_file()
-                self.btn_run.config(state="normal")
+                self.btn_run.config(state="normal", bg="#10B981", cursor="hand2")
                 for i in range(5): self.edit_menu.entryconfig(i, state="normal") 
-                self.lbl_status.config(text=f"Dati: {self.raw_data.size()} misure pronte.")
+                self.lbl_status.config(text=f"Dati: {self.raw_data.size()} misure pronte.", fg="#10B981")
             except Exception as e:
                 messagebox.showerror("Errore", str(e))
 
@@ -204,11 +272,11 @@ class PolaresApp:
         file_path = filedialog.askopenfilename(filetypes=[("Testo (X Z)", "*.txt *.csv"), ("Tutti", "*.*")])
         if file_path:
             self.topo_filepath = file_path
-            self.lbl_topo.config(text=f"Topografia: {file_path.split('/')[-1]}", fg="green")
+            self.lbl_topo.config(text=f"Topografia: {file_path.split('/')[-1]}", fg="#10B981")
             
     def clear_topo(self):
         self.topo_filepath = None
-        self.lbl_topo.config(text="Topografia: Nessuna", fg="gray")
+        self.lbl_topo.config(text="Topografia: Nessuna", fg="#7F8C8D")
 
     # --- FUNZIONI EDIT ---
     def reverse_data(self):
@@ -218,7 +286,7 @@ class PolaresApp:
             pos = self.raw_data.sensorPosition(i)
             self.raw_data.setSensorPosition(i, [max_x - pos[0], pos[1], pos[2]])
         self.raw_data.set('k', ert.geometricFactors(self.raw_data))
-        self.lbl_status.config(text="Sezione specchiata (Reverse). Pronta da invertire.")
+        self.lbl_status.config(text="Sezione specchiata (Reverse). Pronta da invertire.", fg="#F59E0B")
         messagebox.showinfo("Reverse", "La geometria della stesa è stata capovolta.")
 
     def change_start_pos(self):
@@ -228,7 +296,7 @@ class PolaresApp:
             for i in range(self.raw_data.sensorCount()):
                 pos = self.raw_data.sensorPosition(i)
                 self.raw_data.setSensorPosition(i, [pos[0] + offset, pos[1], pos[2]])
-            self.lbl_status.config(text=f"X Shiftata di {offset}m")
+            self.lbl_status.config(text=f"X Shiftata di {offset}m", fg="#F59E0B")
 
     def trim_data(self):
         if not self.raw_data: return
@@ -255,7 +323,7 @@ class PolaresApp:
         if invalid:
             self.raw_data.markInvalid(invalid)
             self.raw_data.removeInvalid()
-            self.lbl_status.config(text=f"Filtraggio applicato. {self.raw_data.size()} dati rimasti.")
+            self.lbl_status.config(text=f"Filtraggio applicato. {self.raw_data.size()} dati rimasti.", fg="#F59E0B")
             messagebox.showinfo("Completato", f"Rimossi {len(invalid)} punti dalla pseudosezione.")
 
     def filter_bad_data(self):
@@ -285,14 +353,14 @@ class PolaresApp:
         if to_remove:
             self.raw_data.markInvalid(list(to_remove))
             self.raw_data.removeInvalid()
-            self.lbl_status.config(text=f"Rimossi {len(to_remove)} punti visivamente.")
+            self.lbl_status.config(text=f"Rimossi {len(to_remove)} punti visivamente.", fg="#F59E0B")
 
     # --- INVERSIONE ---
     def run_inversion_thread(self):
         if not self.raw_data: return
-        self.btn_run.config(state="disabled")
+        self.btn_run.config(state="disabled", bg="#9CA3AF", cursor="arrow")
         method = "Robust (L1)" if self.inv_method.get() == "L1" else "Smooth (L2)"
-        self.lbl_status.config(text=f"Calcolo in corso ({method})...")
+        self.lbl_status.config(text=f"Calcolo in corso ({method})...", fg="#F59E0B")
         threading.Thread(target=self.process_inversion, daemon=True).start()
 
     def process_inversion(self):
@@ -300,7 +368,9 @@ class PolaresApp:
             is_robust = (self.inv_method.get() == "L1")
             max_d = self.max_depth.get() 
             para_dx = self.mesh_cl.get()
-            quality = 34.5 if self.mesh_refine.get() else 33.5 # Regola la finezza
+            
+            base_quality = self.mesh_quality.get()
+            quality = base_quality + 0.5 if self.mesh_refine.get() else base_quality
             
             if self.topo_filepath:
                 topo_data = np.loadtxt(self.topo_filepath)
@@ -311,10 +381,23 @@ class PolaresApp:
                     self.raw_data.setSensorPosition(i, [pos[0], z_val, pos[2]])
 
             self.mgr = ert.ERTManager(self.raw_data)
+            
+            inv_kwargs = {
+                'lam': self.lam_val.get(),
+                'zWeight': self.z_weight.get(),
+                'robustData': is_robust,
+                'blockyModel': is_robust,
+                'paraDepth': max_d,
+                'paraDX': para_dx,
+                'quality': quality,
+                'maxIter': 10,
+                'verbose': False
+            }
+            
+            if self.mesh_area.get() > 0:
+                inv_kwargs['paraMaxCellSize'] = self.mesh_area.get()
                 
-            self.mgr.invert(lam=self.lam_val.get(), zWeight=self.z_weight.get(), robustData=is_robust, 
-                            blockyModel=is_robust, paraDepth=max_d, paraDX=para_dx, quality=quality, 
-                            maxIter=10, verbose=False)
+            self.mgr.invert(**inv_kwargs)
             
             self.current_response = self.mgr.inv.response
             self.root.after(0, self.on_inversion_complete)
@@ -322,8 +405,8 @@ class PolaresApp:
             self.root.after(0, self.on_inversion_error, str(e))
 
     def on_inversion_complete(self):
-        self.lbl_status.config(text="Inversione completata!", fg="green")
-        self.btn_run.config(state="normal")
+        self.lbl_status.config(text="Inversione completata!", fg="#10B981")
+        self.btn_run.config(state="normal", bg="#10B981", cursor="hand2")
         self.file_menu.entryconfig("Salva Immagine Grafici (.png)", state="normal")
         self.file_menu.entryconfig("Esporta Modello per QGIS (.vtk)", state="normal")
         self.tools_menu.entryconfig("Mostra grafici a 3 pannelli", state="normal")
@@ -331,8 +414,8 @@ class PolaresApp:
         self.show_custom_plots()
 
     def on_inversion_error(self, error_msg):
-        self.btn_run.config(state="normal")
-        self.lbl_status.config(text="Errore.", fg="red")
+        self.btn_run.config(state="normal", bg="#10B981", cursor="hand2")
+        self.lbl_status.config(text="Errore durante l'inversione.", fg="#EF4444")
         messagebox.showerror("Errore", error_msg)
 
     def extract_1d_section(self):
@@ -355,12 +438,11 @@ class PolaresApp:
             plt.xscale('log')
             plt.show()
 
-    # --- MOTORE GRAFICO STILE RESIPY CON PANNELLO INTERATTIVO E NUMERI REALI ---
+    # --- MOTORE GRAFICO STILE RESIPY ---
     def show_custom_plots(self):
         if not self.mgr: return
         plt.close('all')
         
-        # Inizializza la figura con spazio a destra per la colorbar e in basso per i controlli
         fig = plt.figure(figsize=(14, 10))
         fig.canvas.manager.set_window_title('Risultati Inversione (Stile ResIPy)')
         self.current_fig = fig
@@ -368,7 +450,7 @@ class PolaresApp:
         ax1 = fig.add_axes([0.08, 0.70, 0.75, 0.22])
         ax2 = fig.add_axes([0.08, 0.42, 0.75, 0.22], sharex=ax1)
         ax3 = fig.add_axes([0.08, 0.14, 0.75, 0.22], sharex=ax1)
-        cbar_ax = fig.add_axes([0.86, 0.14, 0.02, 0.78]) # Barra Verticale a destra
+        cbar_ax = fig.add_axes([0.86, 0.14, 0.02, 0.78]) 
         
         data = self.mgr.data
         x_centers, z_pseudo = [], []
@@ -382,13 +464,11 @@ class PolaresApp:
         except: rhoa_c = rhoa_m
         model_rho = np.array(self.mgr.model)
         
-        # Limiti Iniziali (Percentili Robusti)
         all_vals = np.concatenate((rhoa_m, rhoa_c, model_rho))
         init_min = np.percentile(all_vals, 2)
         init_max = np.percentile(all_vals, 98)
         if init_min <= 0: init_min = np.min(all_vals[all_vals > 0])
 
-        # Prepara la mesh per il modello inverso
         mesh = self.mgr.paraDomain
         node_x = np.array([n.pos()[0] for n in mesh.nodes()])
         node_z = np.array([n.pos()[1] for n in mesh.nodes()])
@@ -397,11 +477,9 @@ class PolaresApp:
         triang_pseudo = tri.Triangulation(x_centers, z_pseudo)
         triang_model = tri.Triangulation(node_x, node_z)
         
-        # Coordinate per il taglio (Crop)
         x_min_data = np.min([data.sensorPosition(i)[0] for i in range(data.sensorCount())])
         x_max_data = np.max([data.sensorPosition(i)[0] for i in range(data.sensorCount())])
 
-        # --- WIDGETS INTERATTIVI IN BASSO ---
         ax_vmin = fig.add_axes([0.15, 0.03, 0.1, 0.04])
         txt_vmin = TextBox(ax_vmin, 'Min Rho: ', initial=f"{init_min:.1f}")
 
@@ -414,7 +492,6 @@ class PolaresApp:
         ax_chk = fig.add_axes([0.60, 0.01, 0.23, 0.08])
         chk = CheckButtons(ax_chk, ['Contour Lines', 'Crop Corners'], [True, False])
 
-        # Salviamo i widget in memoria per evitare che vengano rimossi dal garbage collector
         fig.widgets = [txt_vmin, txt_vmax, btn_apply, chk]
 
         def draw_all(event=None):
@@ -434,7 +511,6 @@ class PolaresApp:
             res_cmap = plt.get_cmap('seismic')
             norm = LogNorm(vmin=v_min, vmax=v_max)
             
-            # Gestione Crop
             if crop_corners:
                 depth = -triang_model.y
                 mask = (triang_model.x < x_min_data + depth) | (triang_model.x > x_max_data - depth)
@@ -453,7 +529,6 @@ class PolaresApp:
                 ax2.tripcolor(triang_pseudo, rhoa_c, cmap=res_cmap, norm=norm, shading='gouraud')
                 ax3.tripcolor(triang_model, node_rho, cmap=res_cmap, norm=norm, shading='gouraud')
 
-            # Formatting
             max_d = self.max_depth.get()
             ax1.invert_yaxis()
             ax1.set_ylim(bottom=max_d, top=0)
@@ -473,7 +548,6 @@ class PolaresApp:
 
             for ax in [ax1, ax2, ax3]: ax.set_aspect('auto')
 
-            # Colorbar formattata con Numeri Reali (Senza notazione scientifica)
             def res_fmt(x, pos):
                 return f"{int(x)}" if x >= 10 else f"{x:.2f}"
             
@@ -483,11 +557,9 @@ class PolaresApp:
             
             fig.canvas.draw_idle()
 
-        # Collega i trigger
         btn_apply.on_clicked(draw_all)
         chk.on_clicked(draw_all)
 
-        # Prima esecuzione
         draw_all()
         plt.show()
 
@@ -495,7 +567,6 @@ class PolaresApp:
         if not self.mgr: return
         file_path = filedialog.asksaveasfilename(defaultextension=".png", filetypes=[("PNG", "*.png")])
         if file_path:
-            # Rimuove temporaneamente i widgets prima di salvare per una foto pulita
             if self.current_fig:
                 for w in self.current_fig.widgets:
                     if hasattr(w, 'ax'): w.ax.set_visible(False)
