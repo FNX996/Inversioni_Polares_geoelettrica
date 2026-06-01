@@ -75,25 +75,3 @@ Permission is hereby granted, free of charge, to any person obtaining a copy of 
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-
-#### 3. Pubblica la nuova Release (v3.0.0) con il Changelog
-1. Vai su **Releases** e clicca su **Draft a new release**.
-2. **Tag:** `v3.0.0`.
-3. **Titolo:** `PolaresInversion v3.0.0 - Major UI Overhaul & Interactive Canvas`
-4. Copia e incolla la descrizione qui sotto.
-5. Trascina l'eseguibile appena compilato (`PolaresInvert.exe`) nel riquadro in basso.
-6. Clicca su **Publish release**.
-
-**Testo per la descrizione della Release:**
-```markdown
-## What's New in v3.0.0 🚀
-
-This major release introduces a completely redesigned graphical interface, transforming the core user experience into a polished, modern workspace while maintaining the robust geophysical calculation engine.
-
-### 🌟 Key Changes & New Features:
-* **Complete UI/UX Redesign:** Dropped legacy styles in favor of a modern "flat design" architecture using the clean `Segoe UI` system font, updated color palettes, and structured layouts.
-* **Dark-Mode Splash Screen:** Introduced an elegant loading sequence bridging the start-up phase, featuring software credits and seamless fading into the primary workspace.
-* **Dynamic Contextual Buttons:** Primary action buttons now feature visual state changes (Ready vs. Disabled vs. Processing) utilizing clear, color-coded indicators to guide the workflow (e.g., bright green when inversion completes).
-* **Organized Settings Menu:** Redesigned the "Advanced Settings" popup into a clean, grid-based layout for easier input of Mesh variables (Quality, Area, Refinement) and boundary limits.
-* **Stability Fixes:** Corrected a specific font rendering bug (`tracking`) that prevented the application from launching smoothly on certain Windows builds.
